@@ -104,7 +104,7 @@ func (u *UserHandler) Register(c echo.Context) error {
 }
 
 func sendConfirmationEmail(recipientEmail string) error {
-	apiKey := "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"
+	apiKey := "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"
 	fromEmail := "ssmile2299@gmail.com"
 	client := sendgrid.NewSendClient(apiKey)
 
@@ -375,16 +375,25 @@ func (u *UserHandler) XenditCallback(c echo.Context) error {
 
 	fmt.Printf("Xendit Callback Payload: %+v\n", payload)
 
-	externalID, ok := payload["your-external-id"].(string)
+	userID, ok := payload["user_id"].(string)
 	if !ok {
-		fmt.Println("Error extracting external ID from Xendit callback payload")
+		fmt.Println("Error extracting user ID from Xendit callback payload")
 		return c.JSON(http.StatusBadRequest, echo.Map{
-			"message": "error extracting external ID from Xendit callback payload",
+			"message": "error extracting user ID from Xendit callback payload",
+		})
+	}
+
+	userIDInt, err := strconv.Atoi(userID)
+	if err != nil {
+		fmt.Println("Error converting user ID to integer:", err)
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"message": "error converting user ID to integer",
+			"error":   err.Error(),
 		})
 	}
 
 	var rent model.Rents
-	if err := u.DB.Where("external_id = ?", externalID).First(&rent).Error; err != nil {
+	if err := u.DB.Where("user_id = ?", userIDInt).First(&rent).Error; err != nil {
 		fmt.Println("Error finding rent record:", err)
 		return c.JSON(http.StatusInternalServerError, echo.Map{
 			"message": "error finding rent record",
