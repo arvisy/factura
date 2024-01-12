@@ -11,6 +11,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
+	"github.com/sendgrid/sendgrid-go"
+	"github.com/sendgrid/sendgrid-go/helpers/mail"
 	"github.com/xendit/xendit-go"
 	"github.com/xendit/xendit-go/invoice"
 	"golang.org/x/crypto/bcrypt"
@@ -80,6 +82,15 @@ func (u *UserHandler) Register(c echo.Context) error {
 		})
 	}
 
+	err = sendConfirmationEmail(newUser.Email)
+	if err != nil {
+		// Jika gagal mengirim email, Anda dapat menangani kesalahan di sini
+		return c.JSON(500, echo.Map{
+			"message": "failed to send confirmation email",
+			"detail":  err.Error(),
+		})
+	}
+
 	responseBody := model.Users{
 		UserID:  newUser.UserID,
 		Email:   newUser.Email,
@@ -90,6 +101,31 @@ func (u *UserHandler) Register(c echo.Context) error {
 		"message":   "success register",
 		"user_info": responseBody,
 	})
+}
+
+func sendConfirmationEmail(recipientEmail string) error {
+	apiKey := "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"
+	fromEmail := "ssmile2299@gmail.com"
+	client := sendgrid.NewSendClient(apiKey)
+
+	message := mail.NewSingleEmail(
+		mail.NewEmail("Sender Name", fromEmail),
+		"Registration Info",
+		mail.NewEmail("Recipient Name", recipientEmail),
+		"Thank you for registering! Your account has been successfully created.",
+		"<p>Thank you for registering! Your account has been successfully created.</p>",
+	)
+
+	response, err := client.Send(message)
+	if err != nil {
+		return err
+	}
+
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		return nil
+	} else {
+		return fmt.Errorf("failed to send email, status code: %d", response.StatusCode)
+	}
 }
 
 func (uh *UserHandler) Login(c echo.Context) error {
