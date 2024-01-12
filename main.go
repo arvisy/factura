@@ -21,6 +21,9 @@ func main() {
 		user.GET("/info", userHandler.GetInfoUser, middleware.Authentication, middleware.CustomerAuth)
 		user.GET("/equipments", userHandler.GetAllEquipment)
 		user.POST("/rents", userHandler.RentEquipment, middleware.Authentication, middleware.CustomerAuth)
+		user.POST("/topup", userHandler.Topup, middleware.Authentication, middleware.CustomerAuth)
+		user.POST("/payment", userHandler.Payment, middleware.Authentication, middleware.CustomerAuth)
+		user.POST("/callback", userHandler.XenditCallback, middleware.Authentication, middleware.CustomerAuth)
 
 		user.POST("/equipments", userHandler.CreateEquipment, middleware.Authentication, middleware.AdminAuth)
 		user.DELETE("/equipments/:id", userHandler.DeleteEquipment, middleware.Authentication, middleware.AdminAuth)

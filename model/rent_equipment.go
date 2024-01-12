@@ -1,7 +1,7 @@
 package model
 
 type RentEquipment struct {
-	RentEquipmentID int    `json:"rent_Equipment_id"`
+	RentEquipmentID int    `json:"rent_equipment_id"`
 	RentID          int    `json:"rent_id"`
 	EquipmentID     int    `json:"equipment_id"`
 	Quantity        int    `json:"quantity"`

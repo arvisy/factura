@@ -1,0 +1,323 @@
+swagger: '2.0'
+info:
+  title: Pair Project API
+  version: 1.0.0
+  description: API documentation for Pair Project
+
+paths:
+  /register:
+    post:
+      tags:
+        - User
+      summary: Register a new user
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: newUser
+          description: User registration data
+          required: true
+          schema:
+            $ref: "#/definitions/Users"
+      responses:
+        '201':
+          description: User successfully registered
+          schema:
+            $ref: "#/definitions/Users"
+
+  /login:
+    post:
+      tags:
+        - User
+      summary: User login
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: loginRequest
+          description: User login credentials
+          required: true
+          schema:
+            $ref: "#/definitions/Users"
+      responses:
+        '200':
+          description: User successfully logged in
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              token:
+                type: string
+
+  /user/info:
+    get:
+      tags:
+        - User
+      summary: Get user information
+      security:
+        - BearerAuth: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: User information successfully retrieved
+          schema:
+            $ref: "#/definitions/Users"
+
+  /equipments:
+    get:
+      tags:
+        - User
+      summary: Get all equipments
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: List of all equipments
+          schema:
+            type: object
+            properties:
+              equipments:
+                type: array
+                items:
+                  $ref: "#/definitions/Equipments"
+
+  /rent:
+    post:
+      tags:
+        - User
+      summary: Rent equipment
+      security:
+        - BearerAuth: []
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: rentRequest
+          description: Equipment rental request
+          required: true
+          schema:
+            $ref: "#/definitions/RentEquipment"
+      responses:
+        '201':
+          description: Equipment rented successfully
+          schema:
+            $ref: "#/definitions/RentEquipmentResponse"
+
+  /payment:
+    post:
+      tags:
+        - User
+      summary: Make a payment for rented equipments
+      security:
+        - BearerAuth: []
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: Invoice created successfully
+          schema:
+            $ref: "#/definitions/InvoiceResponse"
+
+  /xendit/callback:
+    post:
+      tags:
+        - User
+      summary: Xendit callback endpoint
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: callbackPayload
+          description: Xendit callback payload
+          required: true
+          schema:
+            type: object
+        - name: Authorization
+          in: header
+          type: string
+          required: true
+      responses:
+        '200':
+          description: Xendit callback processed successfully
+        '400':
+          description: Bad Request
+
+  /topup:
+    post:
+      tags:
+        - User
+      summary: Top up user's deposit
+      security:
+        - BearerAuth: []
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: topupData
+          description: Top up request data
+          required: true
+          schema:
+            $ref: "#/definitions/Topup"
+      responses:
+        '200':
+          description: Top up success
+          schema:
+            $ref: "#/definitions/TopupResponse"
+
+  /equipment:
+    post:
+      tags:
+        - Admin
+      summary: Create a new equipment
+      security:
+        - BearerAuth: []
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: newEquipment
+          description: Equipment details
+          required: true
+          schema:
+            $ref: "#/definitions/Equipments"
+      responses:
+        '201':
+          description: Equipment created successfully
+          schema:
+            $ref: "#/definitions/Equipments"
+
+  /equipment/{id}:
+    delete:
+      tags:
+        - Admin
+      summary: Delete an equipment by ID
+      security:
+        - BearerAuth: []
+      produces:
+        - application/json
+      parameters:
+        - name: id
+          in: path
+          description: Equipment ID to delete
+          required: true
+          type: integer
+      responses:
+        '200':
+          description: Equipment deleted successfully
+          schema:
+            $ref: "#/definitions/Equipments"
+
+    put:
+      tags:
+        - Admin
+      summary: Update an equipment by ID
+      security:
+        - BearerAuth: []
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: id
+          in: path
+          description: Equipment ID to update
+          required: true
+          type: integer
+        - in: body
+          name: updateEquipment
+          description: Updated equipment details
+          required: true
+          schema:
+            $ref: "#/definitions/Equipments"
+      responses:
+        '200':
+          description: Equipment updated successfully
+          schema:
+            $ref: "#/definitions/Equipments"
+
+definitions:
+  Users:
+    type: object
+    properties:
+      UserID:
+        type: integer
+      Email:
+        type: string
+      Deposit:
+        type: integer
+      Password:
+        type: string
+
+  Equipments:
+    type: object
+    properties:
+      EquipmentID:
+        type: integer
+      Name:
+        type: string
+      Stock:
+        type: integer
+      RentalCost:
+        type: integer
+      Category:
+        type: string
+
+  RentEquipment:
+    type: object
+    properties:
+      EquipmentID:
+        type: integer
+      Quantity:
+        type: integer
+      StartDate:
+        type: string
+      EndDate:
+        type: string
+
+  RentEquipmentResponse:
+    type: object
+    properties:
+      message:
+        type: string
+      rent_info:
+        $ref: "#/definitions/RentEquipment"
+      equipment:
+        $ref: "#/definitions/Equipments"
+
+  InvoiceResponse:
+    type: object
+    properties:
+      message:
+        type: string
+      invoice:
+        type: object
+
+  Topup:
+    type: object
+    properties:
+      TopupAmount:
+        type: integer
+
+  TopupResponse:
+    type: object
+    properties:
+      message:
+        type: string
+      user_id:
+        type: integer
+      deposit:
+        type: integer

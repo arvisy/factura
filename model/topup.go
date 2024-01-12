@@ -5,4 +5,5 @@ type Topup struct {
 	UserID      int    `json:"user_id"`
 	TopupAmount int    `json:"topup_amount"`
 	TopupDate   string `json:"topup_date"`
+	Status      string `json:"status"`
 }

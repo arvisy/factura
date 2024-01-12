@@ -21,11 +21,12 @@ CREATE TABLE IF NOT EXISTS rents (
     payment_status VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS topup (
+CREATE TABLE IF NOT EXISTS topups (
     topup_id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(user_id),
     topup_amount INT NOT NULL,
-    topup_date VARCHAR(50)
+    topup_date VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS rent_equipments (

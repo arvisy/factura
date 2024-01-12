@@ -2,12 +2,17 @@ package handler
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	"pair-project/model"
+	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
+	"github.com/xendit/xendit-go"
+	"github.com/xendit/xendit-go/invoice"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -34,6 +39,13 @@ func (u *UserHandler) Register(c echo.Context) error {
 	if newUser.Email == "" || newUser.Password == "" {
 		return c.JSON(400, echo.Map{
 			"message": "email and password are required",
+		})
+	}
+
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(newUser.Email) {
+		return c.JSON(400, echo.Map{
+			"message": "invalid email format",
 		})
 	}
 
@@ -133,7 +145,7 @@ func GenerateJWTToken(user *model.Users) (string, error) {
 	return signedToken, nil
 }
 
-func (uh *UserHandler) GetInfoUser(c echo.Context) error {
+func (u *UserHandler) GetInfoUser(c echo.Context) error {
 	userID, ok := c.Get("user_id").(int)
 	if !ok {
 		return c.JSON(401, echo.Map{
@@ -155,7 +167,7 @@ func (uh *UserHandler) GetInfoUser(c echo.Context) error {
 	}
 
 	user := new(model.Users)
-	result := uh.DB.First(&user, userID)
+	result := u.DB.First(&user, userID)
 	if result.Error != nil {
 		return c.JSON(500, echo.Map{
 			"message": "failed to get user information",
@@ -198,14 +210,11 @@ func (u *UserHandler) RentEquipment(c echo.Context) error {
 		})
 	}
 
-	if rentRequest.RentEquipmentID == 0 || rentRequest.Quantity == 0 || rentRequest.StartDate == "" || rentRequest.EndDate == "" {
+	if rentRequest.EquipmentID == 0 || rentRequest.Quantity == 0 || rentRequest.StartDate == "" || rentRequest.EndDate == "" {
 		return c.JSON(400, echo.Map{
 			"message": "equipment_id, quantity, start_date, and end_date are required",
 		})
 	}
-
-	var lastRentID int
-	u.DB.Model(&model.Rents{}).Select("rent_id").Order("rent_id desc").Limit(1).Scan(&lastRentID)
 
 	newRent := model.Rents{
 		UserID:        userID,
@@ -213,18 +222,24 @@ func (u *UserHandler) RentEquipment(c echo.Context) error {
 		PaymentStatus: "pending",
 	}
 
-	newRent.RentID = lastRentID + 1
+	var existingPendingRent model.Rents
 
-	result := u.DB.Create(&newRent)
-	if result.Error != nil {
-		return c.JSON(500, echo.Map{
-			"message": "failed to create rent entry",
-			"detail":  result.Error.Error(),
-		})
+	result := u.DB.Where("user_id = ? AND payment_status = 'pending'", userID).First(&existingPendingRent)
+	if result.Error == nil {
+		newRent.RentID = existingPendingRent.RentID
+	} else {
+		var lastRentID int
+		u.DB.Model(&model.Rents{}).Select("rent_id").Order("rent_id desc").Limit(1).Scan(&lastRentID)
+		newRent.RentID = lastRentID + 1
+
+		result = u.DB.Create(&newRent)
+		if result.Error != nil {
+			return c.JSON(500, echo.Map{
+				"message": "failed to create rent entry",
+				"detail":  result.Error.Error(),
+			})
+		}
 	}
-
-	var lastRentEquipmentID int
-	u.DB.Model(&model.RentEquipment{}).Select("rent_equipment_id").Order("rent_equipment_id desc").Limit(1).Scan(&lastRentEquipmentID)
 
 	equipment := new(model.Equipments)
 	result = u.DB.First(&equipment, rentRequest.EquipmentID)
@@ -252,6 +267,8 @@ func (u *UserHandler) RentEquipment(c echo.Context) error {
 		TotalRentalCost: totalRentalCost,
 	}
 
+	var lastRentEquipmentID int
+	u.DB.Model(&model.RentEquipment{}).Select("rent_equipment_id").Order("rent_equipment_id desc").Limit(1).Scan(&lastRentEquipmentID)
 	newRentEquipment.RentEquipmentID = lastRentEquipmentID + 1
 
 	result = u.DB.Create(&newRentEquipment)
@@ -272,9 +289,157 @@ func (u *UserHandler) RentEquipment(c echo.Context) error {
 	})
 }
 
-// func (u *UserHandler) Topup(c echo.Context) error {
+func (u *UserHandler) Payment(c echo.Context) error {
+	userID, ok := c.Get("user_id").(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{
+			"message": "unauthorized",
+		})
+	}
 
-// }
+	var totalRentalCost int
+	u.DB.
+		Model(&model.RentEquipment{}).
+		Joins("JOIN rents ON rent_equipments.rent_id = rents.rent_id").
+		Joins("JOIN users ON rents.user_id = users.user_id").
+		Select("COALESCE(SUM(rent_equipments.total_rental_cost), 0) AS total_rental_cost").
+		Where("users.user_id = ?", userID).
+		Scan(&totalRentalCost)
+
+	xendit.Opt.SecretKey = "xnd_development_rlG0Cw5HcEjmlNu4dv4obsR46hiEKdzpoB1KwyGarmxl1KMVzBukIns0o94S"
+
+	createInvoiceData := invoice.CreateParams{
+		ExternalID: "your-external-id",
+		Amount:     (float64(totalRentalCost)),
+		PayerEmail: "user@example.com",
+	}
+
+	resp, err := invoice.Create(&createInvoiceData)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"message": "error creating invoice",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"message": "invoice created successfully",
+		"invoice": resp,
+	})
+}
+
+func (u *UserHandler) XenditCallback(c echo.Context) error {
+	var payload map[string]interface{}
+	if err := c.Bind(&payload); err != nil {
+		fmt.Println("Error parsing Xendit callback payload:", err)
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"message": "error parsing Xendit callback payload",
+		})
+	}
+
+	fmt.Printf("Xendit Callback Payload: %+v\n", payload)
+
+	externalID, ok := payload["your-external-id"].(string)
+	if !ok {
+		fmt.Println("Error extracting external ID from Xendit callback payload")
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"message": "error extracting external ID from Xendit callback payload",
+		})
+	}
+
+	var rent model.Rents
+	if err := u.DB.Where("external_id = ?", externalID).First(&rent).Error; err != nil {
+		fmt.Println("Error finding rent record:", err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"message": "error finding rent record",
+			"error":   err.Error(),
+		})
+	}
+
+	if rent.PaymentStatus != "success" {
+		if err := u.DB.Model(&rent).Update("payment_status", "success").Error; err != nil {
+			fmt.Println("Error updating payment status:", err)
+			return c.JSON(http.StatusInternalServerError, echo.Map{
+				"message": "error updating payment status",
+				"error":   err.Error(),
+			})
+		}
+
+		fmt.Println("Payment status updated to success. Additional logic executed.")
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"message": "Xendit callback processed successfully",
+	})
+}
+
+func (u *UserHandler) Topup(c echo.Context) error {
+	userID, ok := c.Get("user_id").(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{
+			"message": "unauthorized",
+		})
+	}
+
+	var topupData model.Topup
+	err := c.Bind(&topupData)
+	if err != nil {
+		return c.JSON(400, echo.Map{
+			"message": "bad request",
+		})
+	}
+
+	if topupData.TopupAmount == 0 {
+		return c.JSON(400, echo.Map{
+			"message": "topup_amount is required",
+		})
+	}
+
+	newTopup := model.Topup{
+		UserID:      userID,
+		TopupAmount: topupData.TopupAmount,
+		TopupDate:   time.Now().Format("2006-01-02 15:04:05"),
+		Status:      "success",
+	}
+
+	lastTopup := model.Topup{}
+	u.DB.Model(&model.Topup{}).Order("topup_id desc").First(&lastTopup)
+	newTopup.TopupID = lastTopup.TopupID + 1
+
+	result := u.DB.Create(&newTopup)
+	if result.Error != nil {
+		return c.JSON(500, echo.Map{
+			"message": "internal server error",
+		})
+	}
+
+	user := new(model.Users)
+	result = u.DB.First(&user, userID)
+	if result.Error != nil {
+		return c.JSON(500, echo.Map{
+			"message": "failed to get user information",
+			"detail":  result.Error.Error(),
+		})
+	}
+
+	user.Deposit += topupData.TopupAmount
+
+	result = u.DB.Model(&model.Users{}).Where("user_id = ?", userID).Updates(map[string]interface{}{
+		"deposit": user.Deposit,
+	})
+	if result.Error != nil {
+		return c.JSON(500, echo.Map{
+			"message": "internal server error",
+		})
+	}
+
+	return c.JSON(200, echo.Map{
+		"message": "topup success",
+		"user_id": userID,
+		"deposit": user.Deposit,
+	})
+
+}
 
 func (u *UserHandler) CreateEquipment(c echo.Context) error {
 	userRole, ok := c.Get("role").(string)
@@ -306,7 +471,6 @@ func (u *UserHandler) CreateEquipment(c echo.Context) error {
 
 	var lastEquipmentID int
 	u.DB.Model(&model.Equipments{}).Select("equipment_id").Order("equipment_id desc").Limit(1).Scan(&lastEquipmentID)
-
 	newEquipment.EquipmentID = lastEquipmentID + 1
 
 	result := u.DB.Create(&newEquipment)
@@ -424,7 +588,7 @@ func (u *UserHandler) UpdateEquipment(c echo.Context) error {
 	existingEquipment.RentalCost = updateWorkout.RentalCost
 	existingEquipment.Category = updateWorkout.Category
 
-	result = u.DB.Save(existingEquipment)
+	result = u.DB.Model(&model.Equipments{}).Where("equipment_id = ?", equipmentID).Updates(existingEquipment)
 	if result.Error != nil {
 		return c.JSON(500, echo.Map{
 			"message": "failed to update equipment",
