@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"pair-project/model"
 	"regexp"
 	"strconv"
@@ -104,7 +105,7 @@ func (u *UserHandler) Register(c echo.Context) error {
 }
 
 func sendConfirmationEmail(recipientEmail string) error {
-	apiKey := "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"
+	apiKey := os.Getenv("apiKey_sendEmail")
 	fromEmail := "ssmile2299@gmail.com"
 	client := sendgrid.NewSendClient(apiKey)
 
@@ -342,7 +343,7 @@ func (u *UserHandler) Payment(c echo.Context) error {
 		Where("users.user_id = ?", userID).
 		Scan(&totalRentalCost)
 
-	xendit.Opt.SecretKey = "xnd_development_rlG0Cw5HcEjmlNu4dv4obsR46hiEKdzpoB1KwyGarmxl1KMVzBukIns0o94S"
+	xendit.Opt.SecretKey = os.Getenv("apiKey_paymentXendit")
 
 	createInvoiceData := invoice.CreateParams{
 		ExternalID: "your-external-id",
