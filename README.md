@@ -1,7 +1,7 @@
 # Factura
 <img align="right" width="250px" src="/image/logo.png">
 
-An e-commerce RestAPI application for selling an equipments.
+An e-commerce RestAPI application for rent an equipments.
 ---
 ## Tech stacks
 - Golang
